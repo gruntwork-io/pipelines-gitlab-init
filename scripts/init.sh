@@ -5,7 +5,7 @@ set -euo pipefail
 : "${CI_COMMIT_SHA:?"Need to set CI_COMMIT_SHA"}"
 : "${CI_PROJECT_ID:?"Need to set CI_PROJECT_ID"}"
 : "${PIPELINES_GITLAB_TOKEN:?"Need to set PIPELINES_GITLAB_TOKEN"}"
-
+CI_MERGE_REQUEST_IID="${CI_MERGE_REQUEST_IID:-}"
 
 get_merge_request_id() {
     if [[ -n "$CI_MERGE_REQUEST_IID" ]]; then
