@@ -1,1 +1,1 @@
-# pipelines-gitlab-credentials
+# pipelines-gitlab-init
