@@ -3,9 +3,15 @@
 set -euo pipefail
 
 : "${CI_COMMIT_SHA:?"Need to set CI_COMMIT_SHA"}"
+: "${CI_JOB_ID:?"Need to set CI_JOB_ID"}"
 : "${CI_PROJECT_ID:?"Need to set CI_PROJECT_ID"}"
+: "${CI_PROJECT_URL:?"Need to set CI_PROJECT_URL"}"
 : "${PIPELINES_GITLAB_TOKEN:?"Need to set PIPELINES_GITLAB_TOKEN"}"
+
 CI_MERGE_REQUEST_IID="${CI_MERGE_REQUEST_IID:-}"
+
+GITLAB_TOKEN=$PIPELINES_GITLAB_TOKEN
+export GITLAB_TOKEN
 
 get_merge_request_id() {
     if [[ -n "$CI_MERGE_REQUEST_IID" ]]; then
@@ -33,21 +39,14 @@ sticky_comment() {
 
     merge_request_id="$(get_merge_request_id)"
 
-    existing_note_id="$(GITLAB_TOKEN=$PIPELINES_GITLAB_TOKEN \
-        glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" \
+    existing_note_id="$(glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" \
         --paginate \
         | jq -r --arg sticky_header "$sticky_header" '. | map(select(.body | startswith($sticky_header))) | .[].id')"
 
     if [[ -n "$existing_note_id" ]]; then
-        GITLAB_TOKEN=$PIPELINES_GITLAB_TOKEN \
-            glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$existing_note_id" \
-            --header "Content-Type: application/json" \
-            --data "$body"
+            echo "$body" | glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$existing_note_id" -
     else
-        GITLAB_TOKEN=$PIPELINES_GITLAB_TOKEN \
-            glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" \
-            --header "Content-Type: application/json" \
-            --data "$body"
+            echo "$body" | glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" -
     fi
 }
 
