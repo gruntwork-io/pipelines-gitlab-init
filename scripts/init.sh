@@ -18,12 +18,12 @@ get_merge_request_id() {
         echo "$CI_MERGE_REQUEST_IID"
     else
         # Look for the merge request ID for the current commit
-        merge_requests=$(GITLAB_TOKEN=$PIPELINES_GITLAB_TOKEN \
+        local -r merge_requests=$(GITLAB_TOKEN=$PIPELINES_GITLAB_TOKEN \
             glab api "projects/$CI_PROJECT_ID/repository/commits/$CI_COMMIT_SHA/merge_requests" \
             --paginate
         )
         # Find the first merge request with "state": "merged"
-        merge_request_id="$(echo "$merge_requests" | jq -r 'map(select( .state=="merged" )) | sort_by(.updated_at) | .[-1] | .iid')"
+        local -r merge_request_id="$(echo "$merge_requests" | jq -r 'map(select( .state=="merged" )) | sort_by(.updated_at) | .[-1] | .iid')"
         if [[ -z "$merge_request_id" ]]; then
             echo "Could not find a merged merge request for commit $CI_COMMIT_SHA" >&2
             exit 1
@@ -33,19 +33,20 @@ get_merge_request_id() {
 }
 
 sticky_comment() {
-    local body=$1
-    sticky_header="<!-- $CI_COMMIT_SHA -->\n"
+    local -r body=$1
+    local -r sticky_header="<!-- $CI_COMMIT_SHA -->\n"
+    local -r sticky_body="$sticky_header$body"
 
-    merge_request_id="$(get_merge_request_id)"
+    local -r merge_request_id="$(get_merge_request_id)"
 
-    existing_note_id="$(glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" \
+    local -r existing_note_id="$(glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" \
         --paginate \
         | jq -r --arg sticky_header "$sticky_header" '. | map(select(.body | startswith($sticky_header))) | .[].id')"
 
     if [[ -n "$existing_note_id" ]]; then
-            glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$existing_note_id" --raw-field "body=$body"
+            glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$existing_note_id" --raw-field "body=$sticky_body"
     else
-            glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --raw-field "body=$body"
+            glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --raw-field "body=$sticky_body"
     fi
 }
 
