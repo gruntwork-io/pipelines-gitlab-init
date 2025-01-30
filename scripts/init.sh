@@ -35,7 +35,6 @@ get_merge_request_id() {
 sticky_comment() {
     local body=$1
     sticky_header="<!-- $CI_COMMIT_SHA -->\n"
-    body="$(jq -cn --arg body "$sticky_header$body" '.body = $body')"
 
     merge_request_id="$(get_merge_request_id)"
 
@@ -44,9 +43,9 @@ sticky_comment() {
         | jq -r --arg sticky_header "$sticky_header" '. | map(select(.body | startswith($sticky_header))) | .[].id')"
 
     if [[ -n "$existing_note_id" ]]; then
-            echo "$body" | glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$existing_note_id" -
+            glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$existing_note_id" --raw-field "body=$body"
     else
-            echo "$body" | glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" -
+            glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --raw-field "body=$body"
     fi
 }
 
