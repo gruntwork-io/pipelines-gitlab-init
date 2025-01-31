@@ -34,8 +34,8 @@ get_merge_request_id() {
 
 sticky_comment() {
     local -r body=$1
-    local -r sticky_header="<!-- $CI_COMMIT_SHA -->\n"
-    local -r sticky_body="$sticky_header$body"
+    local -r sticky_header="<!-- $CI_COMMIT_SHA -->"
+    local -r sticky_body="$sticky_header"'\n'"$body"
 
     local -r merge_request_id="$(get_merge_request_id)"
 
