@@ -35,7 +35,8 @@ get_merge_request_id() {
 sticky_comment() {
     local -r body=$1
     local -r sticky_header="<!-- $CI_COMMIT_SHA -->"
-    local -r sticky_body="$sticky_header"'\n'"$body"
+    local -r sticky_body="$sticky_header
+$body"
 
     local -r merge_request_id="$(get_merge_request_id)"
 
@@ -58,4 +59,4 @@ report_error() {
     sticky_comment "<h2>❌ Gruntwork Pipelines is unable to run</h2>❌ $message<br><br><a href=\"$CI_PROJECT_URL/-/jobs/$CI_JOB_ID\">View full logs</a>"
 }
 
-report_error "This is a test error message"
+report_error "This is a test error message 2"
