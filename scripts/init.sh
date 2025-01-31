@@ -68,7 +68,7 @@ report_error() {
 get_gruntwork_read_token() {
     export PIPELINES_TOKEN_PATH="pipelines-read/gruntwork-io"
     SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-    node "$SCRIPT_DIR/pipelines-credentials.mjs"
+    node "$SCRIPT_DIR/pipelines-credentials.mjs" >&2
     # The node script writes the token to a file, so we need to source it to make it available
     set -a
     source credentials.sh
