@@ -32,7 +32,6 @@ get_merge_request_id() {
         local -r merge_request_id="$(echo "$merge_requests" | jq -r 'map(select( .state=="merged" )) | sort_by(.updated_at) | .[-1] | .iid')"
         if [[ -z "$merge_request_id" ]]; then
             echo "Could not find a merged merge request for commit $CI_COMMIT_SHA" >&2
-            exit 1
         fi
         echo "$merge_request_id"
     fi
@@ -62,7 +61,10 @@ report_error() {
 
     merge_request_id=$(get_merge_request_id)
     
-    sticky_comment "<h2>❌ Gruntwork Pipelines is unable to run</h2>❌ $message<br><br><a href=\"$CI_PROJECT_URL/-/jobs/$CI_JOB_ID\">View full logs</a>"
+    if [[ -n "$merge_request_id" ]]; then
+        sticky_comment "<h2>❌ Gruntwork Pipelines is unable to run</h2>❌ $message<br><br><a href=\"$CI_PROJECT_URL/-/jobs/$CI_JOB_ID\">View full logs</a>"
+    fi
+    echo "$message"
 }
 
 get_gruntwork_read_token() {
