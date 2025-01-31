@@ -94,7 +94,7 @@ echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >> build.e
 
 # Clone the pipelines-actions repository
 set +e
-git clone -b "$GRUNTWORK_PIPELINES_ACTIONS_REF" "https://oauth2:$PIPELINES_GRUNTWORK_READ_TOKEN@gitlab.com:/gruntwork-io/pipelines-actions.git" /tmp/pipelines-actions
+git clone -b "$GRUNTWORK_PIPELINES_ACTIONS_REF" "https://oauth2:$PIPELINES_GRUNTWORK_READ_TOKEN@github.com:/gruntwork-io/pipelines-gitlab-actions.git" /tmp/pipelines-actions
 clone_exit_code=$?
 set -e
 
