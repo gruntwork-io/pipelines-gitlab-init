@@ -2,10 +2,16 @@
 
 set -euo pipefail
 
+set +x
+
+: "${APERTURE_OIDC_TOKEN:?"APERTURE_OIDC_TOKEN must be set"}"
+: "${API_BASE_URL:?"API_BASE_URL must be set"}"
 : "${CI_COMMIT_SHA:?"Need to set CI_COMMIT_SHA"}"
 : "${CI_JOB_ID:?"Need to set CI_JOB_ID"}"
 : "${CI_PROJECT_ID:?"Need to set CI_PROJECT_ID"}"
 : "${CI_PROJECT_URL:?"Need to set CI_PROJECT_URL"}"
+: "${GRUNTWORK_PIPELINES_ACTIONS_REF:?"Need to set GRUNTWORK_PIPELINES_ACTIONS_REF"}"
+: "${PIPELINES_CLI_VERSION:?"Need to set PIPELINES_CLI_VERSION"}"
 : "${PIPELINES_GITLAB_TOKEN:?"Need to set PIPELINES_GITLAB_TOKEN"}"
 
 CI_MERGE_REQUEST_IID="${CI_MERGE_REQUEST_IID:-}"
@@ -59,4 +65,51 @@ report_error() {
     sticky_comment "<h2>❌ Gruntwork Pipelines is unable to run</h2>❌ $message<br><br><a href=\"$CI_PROJECT_URL/-/jobs/$CI_JOB_ID\">View full logs</a>"
 }
 
-report_error "This is a test error message 4"
+get_gruntwork_read_token() {
+    export PIPELINES_TOKEN_PATH="pipelines-read/gruntwork-io"
+    SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+    node "$SCRIPT_DIR/pipelines-credentials.mjs"
+    # The node script writes the token to a file, so we need to source it to make it available
+    set -a
+    source credentials.sh
+    set +a
+    echo "$PIPELINES_GRUNTWORK_READ_TOKEN"
+}
+
+# Exchange the APERTURE_OIDC_TOKEN for a Gruntwork Read token
+set +e
+PIPELINES_GRUNTWORK_READ_TOKEN=$(get_gruntwork_read_token)
+get_gruntwork_read_token_exit_code=$?
+set -e
+
+if [[ $get_gruntwork_read_token_exit_code -ne 0 ]]; then
+    report_error "Failed to authenticate with the Gruntwork API"
+    exit 1
+fi
+
+# Make the token available to other sections in the rest of the current job
+export PIPELINES_GRUNTWORK_READ_TOKEN
+echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >> "$GITLAB_ENV"
+echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >> build.env
+
+# Clone the pipelines-actions repository
+set +e
+git clone -b "$GRUNTWORK_PIPELINES_ACTIONS_REF" "https://oauth2:$PIPELINES_GRUNTWORK_READ_TOKEN@gitlab.com:/gruntwork-io/pipelines-actions.git" /tmp/pipelines-actions
+clone_exit_code=$?
+set -e
+
+if [[ $clone_exit_code -ne 0 ]]; then
+    report_error "Failed to clone the pipelines-actions repository"
+    exit 1
+fi
+
+# Install the Pipelines CLI
+set +e
+/tmp/pipelines-actions/scripts/install-pipelines.sh
+install_exit_code=$?
+set -e
+
+if [[ $install_exit_code -ne 0 ]]; then
+    report_error "Failed to install the Pipelines CLI"
+    exit 1
+fi
