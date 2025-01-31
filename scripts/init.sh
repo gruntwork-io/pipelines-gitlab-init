@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-set +x
+set -x
 
 : "${APERTURE_OIDC_TOKEN:?"APERTURE_OIDC_TOKEN must be set"}"
 : "${API_BASE_URL:?"API_BASE_URL must be set"}"
