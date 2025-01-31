@@ -45,7 +45,7 @@ $body"
         | jq -r --arg sticky_header "$sticky_header" '. | map(select(.body | startswith($sticky_header))) | .[].id')"
 
     if [[ -n "$existing_note_id" ]]; then
-            glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$existing_note_id" --raw-field "body=$sticky_body"
+            glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$existing_note_id" --method PUT --raw-field "body=$sticky_body"
     else
             glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --raw-field "body=$sticky_body"
     fi
@@ -59,4 +59,4 @@ report_error() {
     sticky_comment "<h2>❌ Gruntwork Pipelines is unable to run</h2>❌ $message<br><br><a href=\"$CI_PROJECT_URL/-/jobs/$CI_JOB_ID\">View full logs</a>"
 }
 
-report_error "This is a test error message 2"
+report_error "This is a test error message 3"
