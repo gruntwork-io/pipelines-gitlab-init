@@ -59,4 +59,4 @@ report_error() {
     sticky_comment "<h2>❌ Gruntwork Pipelines is unable to run</h2>❌ $message<br><br><a href=\"$CI_PROJECT_URL/-/jobs/$CI_JOB_ID\">View full logs</a>"
 }
 
-report_error "This is a test error message 3"
+report_error "This is a test error message 4"
