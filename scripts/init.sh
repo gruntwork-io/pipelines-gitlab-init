@@ -30,7 +30,7 @@ get_merge_request_id() {
                 --paginate
         )
         # Find the first merge request with "state": "merged"
-        local -r merge_request_id="$(echo "$merge_requests" | jq -r 'map(select( .state=="merged" )) | sort_by(.updated_at) | .[-1] | .iid')"
+        local -r merge_request_id="$(jq -r 'map(select( .state=="merged" )) | sort_by(.updated_at) | .[-1] | .iid' <<<"$merge_requests")"
         if [[ -z "$merge_request_id" ]]; then
             echo "Could not find a merged merge request for commit $CI_COMMIT_SHA" >&2
         fi
@@ -39,9 +39,19 @@ get_merge_request_id() {
 }
 
 merge_request_id=$(get_merge_request_id)
-merge_request_notes="$(glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate)"
+
+# Initialize merge_request_notes to empty JSON array
+merge_request_notes="[]"
+# merge_request_id may be empty, in which case we don't want to fetch any notes(This is the case for direct commits to the default branch)
+if [[ -n "$merge_request_id" ]]; then
+    merge_request_notes="$(glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate)"
+fi
 
 collapse_older_pipelines_notes() {
+    if [[ "$merge_request_notes" == "[]" ]]; then
+        return
+    fi
+
     # get all notes authored by @gruntwork-ci BUT do not contain the sticky header
     local -r notes_to_collapse=$(echo "$merge_request_notes" | jq -r '. | map(select(.body | contains("<!-- $CI_COMMIT_SHA -->") | not)) | map(select(.author.username == "gruntwork-ci")) | .[].id')
 
