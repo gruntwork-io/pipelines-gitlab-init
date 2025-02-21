@@ -48,7 +48,7 @@ merge_request_id=$(get_merge_request_id)
 merge_request_notes=$(get_merge_request_notes "$merge_request_id")
 
 collapse_older_pipelines_notes() {
-    # get all notes authored by @gruntwork-ci BUT do NOT start with the sticky header
+    # get all notes authored by @gruntwork-ci BUT do not start with the sticky header
     local -r notes_to_collapse=$(echo "$merge_request_notes" | jq -r '. | map(select(.body | startswith("<!-- $CI_COMMIT_SHA -->") | not)) | map(select(.author.username == "gruntwork-ci")) | .[].id')
 
     # Read each note ID line by line
@@ -56,10 +56,10 @@ collapse_older_pipelines_notes() {
         if [[ -n "$note_id" ]]; then
             # TODO: remove this debug logging
             echo "Collapsing note $note_id"
-            # Resolve (collapse) the note using GitLab's API
-            glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$note_id" \
-                --method PUT \
-                --raw-field "resolved=true"
+            # wrap the note in a details tag
+            local -r note_body=$(echo "$merge_request_notes" | jq -r --arg id "$note_id" '. | map(select(.id == ($id|tonumber))) | .[].body')
+            local -r collapsed_body="<details><summary>Previous Pipeline Run</summary>$note_body</details>"
+            glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$note_id" --method PUT --raw-field "body=$collapsed_body"
         fi
     done <<<"$notes_to_collapse"
 }
