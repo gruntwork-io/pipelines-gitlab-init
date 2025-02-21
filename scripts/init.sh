@@ -57,8 +57,10 @@ collapse_older_pipelines_notes() {
             # TODO: remove this debug logging
             echo "Collapsing note $note_id"
             # wrap the note in a details tag
-            local -r note_body=$(echo "$merge_request_notes" | jq -r --arg id "$note_id" '. | map(select(.id == ($id|tonumber))) | .[].body')
+            local -r note_body=$(jq -r --arg id "$note_id" '. | map(select(.id == ($id|tonumber))) | .[].body' <<<"$merge_request_notes")
+            echo "old note body: $note_body"
             local -r collapsed_body="<details><summary>Previous Pipeline Run</summary>$note_body</details>"
+            echo "new note body: $collapsed_body"
             glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$note_id" --method PUT --raw-field "body=$collapsed_body"
         fi
     done <<<"$notes_to_collapse"
