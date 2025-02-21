@@ -137,3 +137,7 @@ if [[ $install_exit_code -ne 0 ]]; then
     report_error "Failed to install the Pipelines CLI"
     exit 1
 fi
+
+if [[ -n "$merge_request_id" ]]; then
+    collapse_older_pipelines_notes
+fi
