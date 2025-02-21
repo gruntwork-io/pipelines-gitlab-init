@@ -61,7 +61,7 @@ collapse_older_pipelines_notes() {
     while IFS= read -r note_id; do
         if [[ -n "$note_id" ]]; then
             # wrap the note in a details tag
-            local -r note_body=$(jq -r --arg id "$note_id" '. | map(select(.id == ($id|tonumber))) | .[].body' <<<"$merge_request_notes")
+            note_body=$(jq -r --arg id "$note_id" '. | map(select(.id == ($id|tonumber))) | .[].body' <<<"$merge_request_notes")
             echo "Extracted note body"
 
             # if note_body has not already been wrapped in a details tag, wrap it in a details tag
