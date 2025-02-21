@@ -40,12 +40,14 @@ get_merge_request_id() {
 
 merge_request_id=$(get_merge_request_id)
 
-# Initialize merge_request_notes to empty JSON array
+# Turn off command tracing before fetching notes
+set +x
 merge_request_notes="[]"
-# merge_request_id may be empty, in which case we don't want to fetch any notes(This is the case for direct commits to the default branch)
 if [[ -n "$merge_request_id" ]]; then
-    merge_request_notes="$(glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate)"
+    merge_request_notes="$(glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate 2>/dev/null)"
 fi
+# Turn command tracing back on if needed
+set -x
 
 collapse_older_pipelines_notes() {
     if [[ "$merge_request_notes" == "[]" ]]; then
@@ -60,9 +62,11 @@ collapse_older_pipelines_notes() {
         if [[ -n "$note_id" ]]; then
             # wrap the note in a details tag
             local -r note_body=$(jq -r --arg id "$note_id" '. | map(select(.id == ($id|tonumber))) | .[].body' <<<"$merge_request_notes")
+            echo "Extracted note body"
 
             # if note_body has not already been wrapped in a details tag, wrap it in a details tag
             if [[ ! "$note_body" =~ ^[[:space:]]*"<details>" ]]; then
+                echo "Wrapping note body in details tag"
                 local -r collapsed_body="<details><summary>Previous Pipeline Run</summary>$note_body</details>"
                 glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$note_id" --method PUT --raw-field "body=$collapsed_body"
             fi
@@ -145,5 +149,7 @@ if [[ $install_exit_code -ne 0 ]]; then
 fi
 
 if [[ -n "$merge_request_id" ]]; then
+    echo "Attempting to collapse pipeline notes for previous commits"
     collapse_older_pipelines_notes
+    echo "Finished attempting to collapse pipeline notes for previous commits"
 fi
