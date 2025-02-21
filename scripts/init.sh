@@ -24,9 +24,10 @@ get_merge_request_id() {
         echo "$CI_MERGE_REQUEST_IID"
     else
         # Look for the merge request ID for the current commit
-        local -r merge_requests=$(GITLAB_TOKEN=$PIPELINES_GITLAB_TOKEN \
-            glab api "projects/$CI_PROJECT_ID/repository/commits/$CI_COMMIT_SHA/merge_requests" \
-            --paginate
+        local -r merge_requests=$(
+            GITLAB_TOKEN=$PIPELINES_GITLAB_TOKEN \
+                glab api "projects/$CI_PROJECT_ID/repository/commits/$CI_COMMIT_SHA/merge_requests" \
+                --paginate
         )
         # Find the first merge request with "state": "merged"
         local -r merge_request_id="$(echo "$merge_requests" | jq -r 'map(select( .state=="merged" )) | sort_by(.updated_at) | .[-1] | .iid')"
@@ -37,39 +38,60 @@ get_merge_request_id() {
     fi
 }
 
+get_merge_request_notes() {
+    local -r merge_request_id=$1
+    local -r notes="$(glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate)"
+    echo "$notes"
+}
+
+merge_request_id=$(get_merge_request_id)
+merge_request_notes=$(get_merge_request_notes "$merge_request_id")
+
+collapse_older_pipelines_notes() {
+    # get all notes authored by @gruntwork-ci BUT do NOT start with the sticky header
+    local -r notes_to_collapse=$(echo "$merge_request_notes" | jq -r '. | map(select(.body | startswith("<!-- $CI_COMMIT_SHA -->") | not)) | map(select(.author.username == "gruntwork-ci")) | .[].id')
+
+    # Read each note ID line by line
+    while IFS= read -r note_id; do
+        if [[ -n "$note_id" ]]; then
+            # TODO: remove this debug logging
+            echo "Collapsing note $note_id"
+            # Resolve (collapse) the note using GitLab's API
+            glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$note_id" \
+                --method PUT \
+                --raw-field "resolved=true"
+        fi
+    done <<<"$notes_to_collapse"
+}
+
 sticky_comment() {
     local -r body=$1
     local -r sticky_header="<!-- $CI_COMMIT_SHA -->"
     local -r sticky_body="$sticky_header
 $body"
 
-    local -r merge_request_id="$(get_merge_request_id)"
-
-    local -r existing_note_id="$(glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" \
-        --paginate \
-        | jq -r --arg sticky_header "$sticky_header" '. | map(select(.body | startswith($sticky_header))) | .[].id')"
+    local -r existing_note_id=$(echo "$merge_request_notes" | jq -r --arg sticky_header "$sticky_header" '. | map(select(.body | startswith($sticky_header))) | .[].id')
 
     if [[ -n "$existing_note_id" ]]; then
-            glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$existing_note_id" --method PUT --raw-field "body=$sticky_body"
+        glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$existing_note_id" --method PUT --raw-field "body=$sticky_body"
     else
-            glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --raw-field "body=$sticky_body"
+        glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --raw-field "body=$sticky_body"
     fi
 }
 
 report_error() {
     local message=$1
 
-    merge_request_id=$(get_merge_request_id)
-    
     if [[ -n "$merge_request_id" ]]; then
         sticky_comment "<h2>❌ Gruntwork Pipelines is unable to run</h2>❌ $message<br><br><a href=\"$CI_PROJECT_URL/-/jobs/$CI_JOB_ID\">View full logs</a>"
+        collapse_older_pipelines_notes
     fi
     echo "$message"
 }
 
 get_gruntwork_read_token() {
     export PIPELINES_TOKEN_PATH="pipelines-read/gruntwork-io"
-    SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+    SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
     node "$SCRIPT_DIR/pipelines-credentials.mjs" >&2
     # The node script writes the token to a file, so we need to source it to make it available
     set -a
@@ -91,8 +113,8 @@ fi
 
 # Make the token available to other sections in the rest of the current job
 export PIPELINES_GRUNTWORK_READ_TOKEN
-echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >> "$GITLAB_ENV"
-echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >> build.env
+echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>"$GITLAB_ENV"
+echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>build.env
 
 # Clone the pipelines-actions repository
 set +e
