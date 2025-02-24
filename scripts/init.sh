@@ -69,9 +69,9 @@ collapse_older_pipelines_notes() {
             note_body=$(jq -r --arg id "$note_id" '. | map(select(.id == ($id|tonumber))) | .[].body' <<<"$merge_request_notes")
 
             # find the opening details tag, if it has open directive, replace it with just the details tag
-            if [[ "$note_body" =~ ^[[:space:]]*"<details open>" ]]; then
+            if [[ "$note_body" =~ "<details open>" ]]; then
                 echo "Removing open directive from note body"
-                collapsed_body=$(echo "$note_body" | sed 's/<details open>/<details>/')
+                collapsed_body=$(sed 's/<details open>/<details>/' <<<"$note_body")
                 glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$note_id" --method PUT --raw-field "body=$collapsed_body"
             fi
         fi
