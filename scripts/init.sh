@@ -54,20 +54,24 @@ collapse_older_pipelines_notes() {
         return
     fi
 
-    # get all notes authored by @gruntwork-ci BUT do not contain the sticky header
-    local -r notes_to_collapse=$(echo "$merge_request_notes" | jq -r '. | map(select(.body | contains("<!-- $CI_COMMIT_SHA -->") | not)) | map(select(.author.username == "gruntwork-ci")) | .[].id')
+    # get all Gruntwork Pipelines notes for previous commits authored by @gruntwork-ci
+    local -r notes_to_collapse=$(jq -r --arg commit_sha "$CI_COMMIT_SHA" '
+        . |
+        map(select(.body | contains("<!-- " + $commit_sha + " -->") | not)) |
+        map(select(.body | contains("Gruntwork Pipelines")) | select(.author.username == "gruntwork-ci")) |
+        .[].id
+    ' <<<"$merge_request_notes")
 
     # Read each note ID line by line
     while IFS= read -r note_id; do
         if [[ -n "$note_id" ]]; then
             # wrap the note in a details tag
             note_body=$(jq -r --arg id "$note_id" '. | map(select(.id == ($id|tonumber))) | .[].body' <<<"$merge_request_notes")
-            echo "Extracted note body"
 
-            # if note_body has not already been wrapped in a details tag, wrap it in a details tag
-            if [[ ! "$note_body" =~ ^[[:space:]]*"<details>" ]]; then
-                echo "Wrapping note body in details tag"
-                local -r collapsed_body="<details><summary>Previous Pipeline Run</summary>$note_body</details>"
+            # find the opening details tag, if it has open directive, replace it with just the details tag
+            if [[ "$note_body" =~ ^[[:space:]]*"<details open>" ]]; then
+                echo "Removing open directive from note body"
+                collapsed_body=$(echo "$note_body" | sed 's/<details open>/<details>/')
                 glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$note_id" --method PUT --raw-field "body=$collapsed_body"
             fi
         fi
