@@ -54,11 +54,11 @@ collapse_older_pipelines_notes() {
         return
     fi
 
-    # get all Gruntwork Pipelines notes for previous commits authored by @gruntwork-ci
+    # get all Gruntwork Pipelines notes for previous commits
     local -r notes_to_collapse=$(jq -r --arg commit_sha "$CI_COMMIT_SHA" '
         . |
         map(select(.body | contains("<!-- " + $commit_sha + " -->") | not)) |
-        map(select(.body | contains("Gruntwork Pipelines")) | select(.author.username == "gruntwork-ci")) |
+        map(select(.body | contains("Gruntwork Pipelines"))) |
         .[].id
     ' <<<"$merge_request_notes")
 
