@@ -22,6 +22,8 @@ CI_MERGE_REQUEST_IID="${CI_MERGE_REQUEST_IID:-}"
 GITLAB_TOKEN=$PIPELINES_GITLAB_TOKEN
 export GITLAB_TOKEN
 
+echo "Initializing Gruntwork Pipelines"
+
 get_merge_request_id() {
     if [[ -n "$CI_MERGE_REQUEST_IID" ]]; then
         echo "$CI_MERGE_REQUEST_IID"
@@ -41,13 +43,17 @@ get_merge_request_id() {
     fi
 }
 
+echo -n "Fetching merge request ID... "
 merge_request_id=$(get_merge_request_id)
+echo "done."
 
 # Turn off command tracing before fetching notes
 set +x
 merge_request_notes="[]"
 if [[ -n "$merge_request_id" ]]; then
+    echo -n "Fetching existing merge request notes... "
     merge_request_notes="$(glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate 2>/dev/null)"
+    echo "done."
 fi
 # Turn command tracing back on if needed
 if [[ "$log_level" == "debug" || "$log_level" == "trace" ]]; then
@@ -120,6 +126,7 @@ get_gruntwork_read_token() {
 }
 
 # Exchange the APERTURE_OIDC_TOKEN for a Gruntwork Read token
+echo -n "Authenticating with Gruntwork API... "
 set +e
 PIPELINES_GRUNTWORK_READ_TOKEN=$(get_gruntwork_read_token)
 get_gruntwork_read_token_exit_code=$?
@@ -129,12 +136,14 @@ if [[ $get_gruntwork_read_token_exit_code -ne 0 ]]; then
     report_error "Failed to authenticate with the Gruntwork API"
     exit 1
 fi
+echo "done."
 
 # Make the token available to other sections in the rest of the current job
 export PIPELINES_GRUNTWORK_READ_TOKEN
 echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>"$GITLAB_ENV"
 echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>build.env
 
+echo -n "Cloning pipelines-actions repository... "
 # Clone the pipelines-actions repository
 set +e
 git clone -b "$GRUNTWORK_PIPELINES_ACTIONS_REF" "https://oauth2:$PIPELINES_GRUNTWORK_READ_TOKEN@github.com:/gruntwork-io/pipelines-gitlab-actions.git" /tmp/pipelines-actions
@@ -145,7 +154,10 @@ if [[ $clone_exit_code -ne 0 ]]; then
     report_error "Failed to clone the pipelines-actions repository"
     exit 1
 fi
+echo "done."
 
+
+echo -n "Installing Pipelines CLI... "
 # Install the Pipelines CLI
 set +e
 /tmp/pipelines-actions/scripts/install-pipelines.sh
@@ -156,9 +168,10 @@ if [[ $install_exit_code -ne 0 ]]; then
     report_error "Failed to install the Pipelines CLI"
     exit 1
 fi
+echo "done."
 
 if [[ -n "$merge_request_id" ]]; then
-    echo "Attempting to collapse pipeline notes for previous commits"
+    echo -n "Collapsing pipeline notes for previous commits... "
     collapse_older_pipelines_notes
-    echo "Finished attempting to collapse pipeline notes for previous commits"
+    echo "done."
 fi
