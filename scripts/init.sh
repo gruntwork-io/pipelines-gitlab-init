@@ -114,10 +114,11 @@ report_error() {
     echo "$message"
 }
 
+credentials_log=$(mktemp -t pipelines-credentials-XXXXXXXX.log)
 get_gruntwork_read_token() {
     export PIPELINES_TOKEN_PATH="pipelines-read/gruntwork-io"
     SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-    node "$SCRIPT_DIR/pipelines-credentials.mjs" >&2
+    node "$SCRIPT_DIR/pipelines-credentials.mjs" > "$credentials_log" 2>&1
     # The node script writes the token to a file, so we need to source it to make it available
     set -a
     source credentials.sh
@@ -133,6 +134,7 @@ get_gruntwork_read_token_exit_code=$?
 set -e
 
 if [[ $get_gruntwork_read_token_exit_code -ne 0 ]]; then
+    cat "$credentials_log"
     report_error "Failed to authenticate with the Gruntwork API"
     exit 1
 fi
