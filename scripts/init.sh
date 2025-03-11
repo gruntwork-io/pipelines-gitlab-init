@@ -83,7 +83,7 @@ collapse_older_pipelines_notes() {
             if [[ "$note_body" =~ "<details open>" ]]; then
                 echo "Removing open directive from note body"
                 collapsed_body=$(sed 's/<details open>/<details>/' <<<"$note_body")
-                glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$note_id" --method PUT --raw-field "body=$collapsed_body"
+                glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$note_id" --method PUT --raw-field "body=$collapsed_body" --silent
             fi
         fi
     done <<<"$notes_to_collapse"
@@ -98,9 +98,9 @@ $body"
     local -r existing_note_id=$(echo "$merge_request_notes" | jq -r --arg sticky_header "$sticky_header" '. | map(select(.body | startswith($sticky_header))) | .[].id')
 
     if [[ -n "$existing_note_id" ]]; then
-        glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$existing_note_id" --method PUT --raw-field "body=$sticky_body"
+        glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$existing_note_id" --method PUT --raw-field "body=$sticky_body" --silent
     else
-        glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --raw-field "body=$sticky_body"
+        glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --raw-field "body=$sticky_body" --silent
     fi
 }
 
