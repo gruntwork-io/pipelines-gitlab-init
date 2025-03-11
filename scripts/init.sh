@@ -147,12 +147,16 @@ echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>build.en
 
 echo -n "Cloning pipelines-actions repository... "
 # Clone the pipelines-actions repository
+clone_log=$(mktemp -t pipelines-clone-XXXXXXXX.log)
 set +e
-git clone -b "$GRUNTWORK_PIPELINES_ACTIONS_REF" "https://oauth2:$PIPELINES_GRUNTWORK_READ_TOKEN@github.com:/gruntwork-io/pipelines-gitlab-actions.git" /tmp/pipelines-actions
+git clone -b "$GRUNTWORK_PIPELINES_ACTIONS_REF" \
+    "https://oauth2:$PIPELINES_GRUNTWORK_READ_TOKEN@github.com:/gruntwork-io/pipelines-gitlab-actions.git" /tmp/pipelines-actions \
+    > "$clone_log" 2>&1
 clone_exit_code=$?
 set -e
 
 if [[ $clone_exit_code -ne 0 ]]; then
+    cat "$clone_log"
     report_error "Failed to clone the pipelines-actions repository"
     exit 1
 fi
@@ -161,12 +165,14 @@ echo "done."
 
 echo -n "Installing Pipelines CLI... "
 # Install the Pipelines CLI
+install_log=$(mktemp -t pipelines-install-XXXXXXXX.log)
 set +e
-/tmp/pipelines-actions/scripts/install-pipelines.sh
+/tmp/pipelines-actions/scripts/install-pipelines.sh > "$install_log" 2>&1
 install_exit_code=$?
 set -e
 
 if [[ $install_exit_code -ne 0 ]]; then
+    cat "$install_log"
     report_error "Failed to install the Pipelines CLI"
     exit 1
 fi
