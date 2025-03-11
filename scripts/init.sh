@@ -133,6 +133,8 @@ PIPELINES_GRUNTWORK_READ_TOKEN=$(get_gruntwork_read_token)
 get_gruntwork_read_token_exit_code=$?
 set -e
 
+echo -n "" # gitlab seems to eat the next echo
+
 if [[ $get_gruntwork_read_token_exit_code -ne 0 ]]; then
     cat "$credentials_log"
     report_error "Failed to authenticate with the Gruntwork API"
