@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
-
-set -x
+log_level="${PIPELINES_LOG_LEVEL:-info}"
+log_level="${log_level,,}" # Convert to lowercase
+if [[ "$log_level" == "debug" || "$log_level" == "trace" ]]; then
+    set -x
+fi
 
 : "${APERTURE_OIDC_TOKEN:?"APERTURE_OIDC_TOKEN must be set"}"
 : "${API_BASE_URL:?"API_BASE_URL must be set"}"
@@ -47,7 +50,9 @@ if [[ -n "$merge_request_id" ]]; then
     merge_request_notes="$(glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate 2>/dev/null)"
 fi
 # Turn command tracing back on if needed
-set -x
+if [[ "$log_level" == "debug" || "$log_level" == "trace" ]]; then
+    set -x
+fi
 
 collapse_older_pipelines_notes() {
     if [[ "$merge_request_notes" == "[]" ]]; then
