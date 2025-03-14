@@ -102,8 +102,10 @@ report_error() {
         <h2>❌ Gruntwork Pipelines is unable to run</h2>
     </summary>
     <p>❌ $message</p>
-    <br><br>
-    <a href=\"$CI_PROJECT_URL/-/jobs/$CI_JOB_ID\">View full logs</a>
+    <hr/>
+	<p>
+	    <em>👉 <a href=\"$CI_PROJECT_URL/-/jobs/$CI_JOB_ID\">View full logs</a></em>
+	</p>
 </details>"
         collapse_older_pipelines_notes
     fi
