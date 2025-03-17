@@ -108,7 +108,16 @@ report_error() {
     local message=$1
 
     if [[ -n "$merge_request_id" ]]; then
-        sticky_comment "<h2>❌ Gruntwork Pipelines is unable to run</h2>❌ $message<br><br><a href=\"$CI_PROJECT_URL/-/jobs/$CI_JOB_ID\">View full logs</a>"
+        sticky_comment "<details open>
+    <summary>
+        <h2>❌ Gruntwork Pipelines is unable to run</h2>
+    </summary>
+    <p>❌ $message</p>
+    <hr/>
+	<p>
+	    <em>👉 <a href=\"$CI_PROJECT_URL/-/jobs/$CI_JOB_ID\">View full logs</a></em>
+	</p>
+</details>"
         collapse_older_pipelines_notes
     fi
     echo "$message"
