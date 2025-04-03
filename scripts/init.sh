@@ -154,7 +154,7 @@ echo "done."
 # Make the token available to other sections in the rest of the current job
 export PIPELINES_GRUNTWORK_READ_TOKEN
 echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>"$GITLAB_ENV"
-echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>build.env
+echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>/tmp/build.env
 
 echo -n "Cloning pipelines-actions repository... "
 # Clone the pipelines-actions repository
