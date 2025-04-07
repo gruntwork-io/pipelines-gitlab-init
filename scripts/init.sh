@@ -83,7 +83,14 @@ collapse_older_pipelines_notes() {
             if [[ "$note_body" =~ "<details open>" ]]; then
                 echo "Removing open directive from note body"
                 collapsed_body=$(sed 's/<details open>/<details>/' <<<"$note_body")
-                glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$note_id" --method PUT --raw-field "body=$collapsed_body" --silent
+                # Write the content to a file to prevent going over the command line length capacity
+                cat >/tmp/note_body.txt <<EOF
+$collapsed_body
+EOF
+
+                # Use the --field flag combined with the @ syntax to pass the file content as the body
+                glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$note_id" --method PUT --field "body=@/tmp/note_body.txt" --silent
+                rm -f /tmp/note_body.txt
             fi
         fi
     done <<<"$notes_to_collapse"
@@ -127,7 +134,7 @@ credentials_log=$(mktemp -t pipelines-credentials-XXXXXXXX.log)
 get_gruntwork_read_token() {
     export PIPELINES_TOKEN_PATH="pipelines-read/gruntwork-io"
     SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-    node "$SCRIPT_DIR/pipelines-credentials.mjs" > "$credentials_log" 2>&1
+    node "$SCRIPT_DIR/pipelines-credentials.mjs" >"$credentials_log" 2>&1
     # The node script writes the token to a file, so we need to source it to make it available
     set -a
     source credentials.sh
@@ -162,7 +169,7 @@ clone_log=$(mktemp -t pipelines-clone-XXXXXXXX.log)
 set +e
 git clone -b "$GRUNTWORK_PIPELINES_ACTIONS_REF" \
     "https://oauth2:$PIPELINES_GRUNTWORK_READ_TOKEN@github.com:/gruntwork-io/pipelines-gitlab-actions.git" /tmp/pipelines-actions \
-    > "$clone_log" 2>&1
+    >"$clone_log" 2>&1
 clone_exit_code=$?
 set -e
 
@@ -173,12 +180,11 @@ if [[ $clone_exit_code -ne 0 ]]; then
 fi
 echo "done."
 
-
 echo -n "Installing Pipelines CLI... "
 # Install the Pipelines CLI
 install_log=$(mktemp -t pipelines-install-XXXXXXXX.log)
 set +e
-/tmp/pipelines-actions/scripts/install-pipelines.sh > "$install_log" 2>&1
+/tmp/pipelines-actions/scripts/install-pipelines.sh >"$install_log" 2>&1
 install_exit_code=$?
 set -e
 
