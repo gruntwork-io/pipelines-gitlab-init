@@ -52,7 +52,8 @@ set +x
 merge_request_notes="[]"
 if [[ -n "$merge_request_id" ]]; then
     echo -n "Fetching existing merge request notes... "
-    merge_request_notes="$(glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate 2>/dev/null)"
+    merge_request_notes="$(glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate)"
+    echo "$merge_request_notes"
     echo "done."
 fi
 # Turn command tracing back on if needed
@@ -159,7 +160,7 @@ fi
 echo "done."
 
 # Make the token available to other sections in the rest of the current job
-export PIPELINES_GRUNTWORK_READ_TOKEN
+export PIPELINES_GRUNTWORK_READ_TOKEN="$PIPELINES_GRUNTWORK_READ_TOKEN"
 echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>"$GITLAB_ENV"
 echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>build.env
 
