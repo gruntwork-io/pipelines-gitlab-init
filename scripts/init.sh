@@ -13,14 +13,15 @@ fi
 : "${CI_JOB_ID:?"Need to set CI_JOB_ID"}"
 : "${CI_PROJECT_ID:?"Need to set CI_PROJECT_ID"}"
 : "${CI_PROJECT_URL:?"Need to set CI_PROJECT_URL"}"
+: "${CI_SERVER_HOST:?"Need to set CI_SERVER_HOST"}"
 : "${GRUNTWORK_PIPELINES_ACTIONS_REF:?"Need to set GRUNTWORK_PIPELINES_ACTIONS_REF"}"
 : "${PIPELINES_CLI_VERSION:?"Need to set PIPELINES_CLI_VERSION"}"
 : "${PIPELINES_GITLAB_TOKEN:?"Need to set PIPELINES_GITLAB_TOKEN"}"
 
 CI_MERGE_REQUEST_IID="${CI_MERGE_REQUEST_IID:-}"
 
-GITLAB_TOKEN=$PIPELINES_GITLAB_TOKEN
-export GITLAB_TOKEN
+export GITLAB_TOKEN="$PIPELINES_GITLAB_TOKEN"
+export GITLAB_HOST="$CI_SERVER_HOST"
 
 echo "Initializing Gruntwork Pipelines"
 
@@ -30,7 +31,6 @@ get_merge_request_id() {
     else
         # Look for the merge request ID for the current commit
         local -r merge_requests=$(
-            GITLAB_TOKEN=$PIPELINES_GITLAB_TOKEN \
                 glab api "projects/$CI_PROJECT_ID/repository/commits/$CI_COMMIT_SHA/merge_requests" \
                 --paginate
         )
