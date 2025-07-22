@@ -67,6 +67,7 @@ merge_request_notes="[]"
             merge_request_notes="[]"
         else
             merge_request_notes="$(cat "$notes_log")"
+            echo ""
             echo "done."
         fi
     else
