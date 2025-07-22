@@ -50,23 +50,28 @@ echo "done."
 # Turn off command tracing before fetching notes
 set +x
 merge_request_notes="[]"
-if [[ -n "$merge_request_id" ]]; then
-    echo -n "Fetching existing merge request notes... "
-    notes_log=$(mktemp -t pipelines-notes-XXXXXXXX.log)
-    set +e
-    glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate >"$notes_log" 2>&1
-    notes_exit_code=$?
-    set -e
-
-    if [[ $notes_exit_code -ne 0 ]]; then
-        echo "failed."
-        cat "$notes_log"
-        merge_request_notes="[]"
+    if [[ -n "$merge_request_id" ]]; then
+        echo -n "Fetching existing merge request notes... "
+        notes_log=$(mktemp -t pipelines-notes-XXXXXXXX.log)
+        notes_err_log=$(mktemp -t pipelines-notes-err-XXXXXXXX.log)
+        set +e
+        glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate >"$notes_log" 2>"$notes_err_log"
+        notes_exit_code=$?
+        set -e
+        
+        if [[ $notes_exit_code -ne 0 ]]; then
+            echo "failed."
+            echo "Error fetching notes (exit code: $notes_exit_code):"
+            cat "$notes_log"
+            cat "$notes_err_log"
+            merge_request_notes="[]"
+        else
+            merge_request_notes="$(cat "$notes_log")"
+            echo "done."
+        fi
     else
-        merge_request_notes="$(cat "$notes_log")"
-        echo "done."
+        echo "No merge request ID found, skipping notes fetch."
     fi
-fi
 # Turn command tracing back on if needed
 if [[ "$log_level" == "debug" || "$log_level" == "trace" ]]; then
     set -x
@@ -74,6 +79,13 @@ fi
 
 collapse_older_pipelines_notes() {
     if [[ "$merge_request_notes" == "[]" ]]; then
+        return
+    fi
+
+    # Validate that merge_request_notes contains valid JSON
+    if ! echo "$merge_request_notes" | jq empty 2>/dev/null; then
+        echo "Warning: Invalid JSON in merge_request_notes, skipping note collapse"
+        echo "merge_request_notes: $merge_request_notes"
         return
     fi
 
