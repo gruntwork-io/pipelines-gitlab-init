@@ -58,7 +58,7 @@ merge_request_notes="[]"
         glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate >"$notes_log" 2>"$notes_err_log"
         notes_exit_code=$?
         set -e
-        
+
         if [[ $notes_exit_code -ne 0 ]]; then
             echo "failed."
             echo "Error fetching notes (exit code: $notes_exit_code):"
@@ -67,7 +67,7 @@ merge_request_notes="[]"
             merge_request_notes="[]"
         else
             merge_request_notes="$(cat "$notes_log")"
-            echo ""
+            echo -n "" # gitlab seems to eat the next echo
             echo "done."
         fi
     else
