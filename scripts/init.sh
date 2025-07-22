@@ -111,15 +111,22 @@ collapse_older_pipelines_notes() {
 
             # find the opening details tag, if it has open directive, replace it with just the details tag
             if [[ "$note_body" =~ "<details open>" ]]; then
-                echo "Removing open directive from note body"
                 collapsed_body=$(sed 's/<details open>/<details>/' <<<"$note_body")
                 # Write the content to a file to prevent going over the command line length capacity
                 cat >/tmp/note_body.txt <<EOF
 $collapsed_body
 EOF
 
+                notes_update_log=$(mktemp -t pipelines-notes-update-XXXXXXXX.log)
+                set +e
                 # Use the --field flag combined with the @ syntax to pass the file content as the body
-                glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$note_id" --method PUT --field "body=@/tmp/note_body.txt" --silent
+                glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$note_id" --method PUT --field "body=@/tmp/note_body.txt" --silent >"$notes_update_log" 2>&1
+                put_note_exit_code=$?
+                set -e
+                if [[ $put_note_exit_code -ne 0 ]]; then
+                    echo "Error updating note $note_id:"
+                    cat "$notes_update_log"
+                fi
                 rm -f /tmp/note_body.txt
             fi
         fi
