@@ -172,19 +172,41 @@ get_gruntwork_read_token() {
     echo "$PIPELINES_GRUNTWORK_READ_TOKEN"
 }
 
-# Exchange the APERTURE_OIDC_TOKEN for a Gruntwork Read token
-printf "Authenticating with Gruntwork API... "
-set +e
-PIPELINES_GRUNTWORK_READ_TOKEN=$(get_gruntwork_read_token)
-get_gruntwork_read_token_exit_code=$?
-set -e
+# Check if PIPELINES_GRUNTWORK_READ_TOKEN is already set
+if [[ -n "${PIPELINES_GRUNTWORK_READ_TOKEN:-}" ]]; then
+    printf "Verifying configured PIPELINES_GRUNTWORK_READ_TOKEN... "
 
-if [[ $get_gruntwork_read_token_exit_code -ne 0 ]]; then
-    cat "$credentials_log"
-    report_error "Failed to authenticate with the Gruntwork API"
-    exit 1
+    # Verify read access to pipelines-gitlab-actions repository
+    verify_log=$(mktemp -t pipelines-verify-XXXXXXXX.log)
+    set +e
+    curl -sS -f -H "Authorization: token $PIPELINES_GRUNTWORK_READ_TOKEN" \
+        "https://api.github.com/repos/gruntwork-io/pipelines-gitlab-actions" \
+        >"$verify_log" 2>&1
+    verify_exit_code=$?
+    set -e
+
+    if [[ $verify_exit_code -ne 0 ]]; then
+        printf "failed.\n"
+        cat "$verify_log"
+        report_error "PIPELINES_GRUNTWORK_READ_TOKEN is not able to access the pipelines-gitlab-actions repository."
+        exit 1
+    fi
+    printf "done.\n"
+else
+    # Exchange the APERTURE_OIDC_TOKEN for a Gruntwork Read token
+    printf "Authenticating with Gruntwork API... "
+    set +e
+    PIPELINES_GRUNTWORK_READ_TOKEN=$(get_gruntwork_read_token)
+    get_gruntwork_read_token_exit_code=$?
+    set -e
+
+    if [[ $get_gruntwork_read_token_exit_code -ne 0 ]]; then
+        cat "$credentials_log"
+        report_error "Failed to authenticate with the Gruntwork API"
+        exit 1
+    fi
+    printf "done.\n"
 fi
-printf "done.\n"
 
 # Make the token available to other sections in the rest of the current job
 export PIPELINES_GRUNTWORK_READ_TOKEN="$PIPELINES_GRUNTWORK_READ_TOKEN"
