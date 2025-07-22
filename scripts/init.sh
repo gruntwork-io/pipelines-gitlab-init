@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# Re-exec the script with unbuffered output if not already done
+if [[ "${STDBUF_APPLIED:-}" != "1" ]]; then
+    export STDBUF_APPLIED=1
+    exec stdbuf -o0 "$0" "$@"
+fi
+
 set -euo pipefail
 log_level="${PIPELINES_LOG_LEVEL:-info}"
 log_level="${log_level,,}" # Convert to lowercase
@@ -43,15 +49,15 @@ get_merge_request_id() {
     fi
 }
 
-echo -n "Fetching merge request ID... "
+printf "Fetching merge request ID... "
 merge_request_id=$(get_merge_request_id)
-echo "done."
+printf "done.\n"
 
 # Turn off command tracing before fetching notes
 set +x
 merge_request_notes="[]"
     if [[ -n "$merge_request_id" ]]; then
-        echo -n "Fetching existing merge request notes... "
+        printf "Fetching existing merge request notes... "
         notes_log=$(mktemp -t pipelines-notes-XXXXXXXX.log)
         notes_err_log=$(mktemp -t pipelines-notes-err-XXXXXXXX.log)
         set +e
@@ -60,15 +66,14 @@ merge_request_notes="[]"
         set -e
 
         if [[ $notes_exit_code -ne 0 ]]; then
-            echo "failed."
+            printf "failed.\n"
             echo "Error fetching notes (exit code: $notes_exit_code):"
             cat "$notes_log"
             cat "$notes_err_log"
             merge_request_notes="[]"
         else
             merge_request_notes="$(cat "$notes_log")"
-            echo -n "" # gitlab seems to eat the next echo
-            echo "done."
+            printf "done.\n"
         fi
     else
         echo "No merge request ID found, skipping notes fetch."
@@ -168,27 +173,25 @@ get_gruntwork_read_token() {
 }
 
 # Exchange the APERTURE_OIDC_TOKEN for a Gruntwork Read token
-echo -n "Authenticating with Gruntwork API... "
+printf "Authenticating with Gruntwork API... "
 set +e
 PIPELINES_GRUNTWORK_READ_TOKEN=$(get_gruntwork_read_token)
 get_gruntwork_read_token_exit_code=$?
 set -e
-
-echo -n "" # gitlab seems to eat the next echo
 
 if [[ $get_gruntwork_read_token_exit_code -ne 0 ]]; then
     cat "$credentials_log"
     report_error "Failed to authenticate with the Gruntwork API"
     exit 1
 fi
-echo "done."
+printf "done.\n"
 
 # Make the token available to other sections in the rest of the current job
 export PIPELINES_GRUNTWORK_READ_TOKEN="$PIPELINES_GRUNTWORK_READ_TOKEN"
 echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>"$GITLAB_ENV"
 echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>build.env
 
-echo -n "Cloning pipelines-actions repository... "
+printf "Cloning pipelines-actions repository... "
 # Clone the pipelines-actions repository
 clone_log=$(mktemp -t pipelines-clone-XXXXXXXX.log)
 set +e
@@ -203,9 +206,9 @@ if [[ $clone_exit_code -ne 0 ]]; then
     report_error "Failed to clone the pipelines-actions repository"
     exit 1
 fi
-echo "done."
+printf "done.\n"
 
-echo -n "Installing Pipelines CLI... "
+printf "Installing Pipelines CLI... "
 # Install the Pipelines CLI
 install_log=$(mktemp -t pipelines-install-XXXXXXXX.log)
 set +e
@@ -218,10 +221,10 @@ if [[ $install_exit_code -ne 0 ]]; then
     report_error "Failed to install the Pipelines CLI"
     exit 1
 fi
-echo "done."
+printf "done.\n"
 
 if [[ -n "$merge_request_id" ]]; then
-    echo -n "Collapsing pipeline notes for previous commits... "
+    printf "Collapsing pipeline notes for previous commits... "
     collapse_older_pipelines_notes
-    echo "done."
+    printf "done.\n"
 fi
