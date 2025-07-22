@@ -52,8 +52,20 @@ set +x
 merge_request_notes="[]"
 if [[ -n "$merge_request_id" ]]; then
     echo -n "Fetching existing merge request notes... "
-    merge_request_notes="$(glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate 2>/dev/null)"
-    echo "done."
+    notes_log=$(mktemp -t pipelines-notes-XXXXXXXX.log)
+    set +e
+    glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate >"$notes_log" 2>&1
+    notes_exit_code=$?
+    set -e
+
+    if [[ $notes_exit_code -ne 0 ]]; then
+        echo "failed."
+        cat "$notes_log"
+        merge_request_notes="[]"
+    else
+        merge_request_notes="$(cat "$notes_log")"
+        echo "done."
+    fi
 fi
 # Turn command tracing back on if needed
 if [[ "$log_level" == "debug" || "$log_level" == "trace" ]]; then
