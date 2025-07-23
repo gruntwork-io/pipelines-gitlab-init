@@ -53,6 +53,8 @@ printf "Fetching merge request ID... "
 merge_request_id=$(get_merge_request_id)
 printf "done.\n"
 
+printf "Merge request ID: %s\n" "$merge_request_id"
+
 # Turn off command tracing before fetching notes
 set +x
 merge_request_notes="[]"
