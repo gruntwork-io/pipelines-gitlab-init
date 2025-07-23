@@ -31,31 +31,37 @@ export GITLAB_HOST="$CI_SERVER_HOST"
 
 echo "Initializing Gruntwork Pipelines"
 
-get_merge_request_id() {
-    if [[ -n "$CI_MERGE_REQUEST_IID" ]]; then
-        echo "$CI_MERGE_REQUEST_IID"
+merge_request_id=""
+if [[ -n "$CI_MERGE_REQUEST_IID" ]]; then
+    merge_request_id="$CI_MERGE_REQUEST_IID"
+else
+    printf "Fetching merge request ID... "
+    merge_requests_log=$(mktemp -t pipelines-merge-requests-XXXXXXXX.log)
+    merge_requests_err_log=$(mktemp -t pipelines-merge-requests-err-XXXXXXXX.log)
+    set +e
+    glab api "projects/$CI_PROJECT_ID/repository/commits/$CI_COMMIT_SHA/merge_requests" --paginate >"$merge_requests_log" 2>"$merge_requests_err_log"
+    merge_requests_exit_code=$?
+    set -e
+
+    if [[ $merge_requests_exit_code -ne 0 ]]; then
+        printf "failed.\n"
+        echo "Error fetching merge requests (exit code: $merge_requests_exit_code):"
+        cat "$merge_requests_log"
+        cat "$merge_requests_err_log"
+        merge_request_id=""
     else
-        # Look for the merge request ID for the current commit
-        local -r merge_requests=$(
-                glab api "projects/$CI_PROJECT_ID/repository/commits/$CI_COMMIT_SHA/merge_requests" \
-                --paginate
-        )
+        merge_requests="$(cat "$merge_requests_log")"
         # Find the first merge request with "state": "merged"
-        local -r merge_request_id="$(jq -r 'map(select( .state=="merged" )) | sort_by(.updated_at) | .[-1] | .iid' <<<"$merge_requests")"
+        merge_request_id="$(jq -r 'map(select( .state=="merged" )) | sort_by(.updated_at) | .[-1] | .iid' <<<"$merge_requests")"
+        printf "done.\n"
         if [[ -z "$merge_request_id" || "$merge_request_id" == "null" ]]; then
             echo "Could not find a merged merge request for commit $CI_COMMIT_SHA" >&2
-            echo ""
+            merge_request_id=""
         else
-            echo "$merge_request_id"
+            printf "Merge request ID: %s\n" "$merge_request_id"
         fi
     fi
-}
-
-printf "Fetching merge request ID... "
-merge_request_id=$(get_merge_request_id)
-printf "done.\n"
-
-printf "Merge request ID: %s\n" "$merge_request_id"
+fi
 
 # Turn off command tracing before fetching notes
 set +x
