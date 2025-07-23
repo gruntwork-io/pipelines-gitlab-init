@@ -29,7 +29,7 @@ CI_MERGE_REQUEST_IID="${CI_MERGE_REQUEST_IID:-}"
 export GITLAB_TOKEN="$PIPELINES_GITLAB_TOKEN"
 export GITLAB_HOST="$CI_SERVER_HOST"
 
-echo "Initializing Gruntwork Pipelines"
+printf "Initializing Gruntwork Pipelines\n"
 
 merge_request_id=""
 if [[ -n "$CI_MERGE_REQUEST_IID" ]]; then
@@ -45,7 +45,7 @@ else
 
     if [[ $merge_requests_exit_code -ne 0 ]]; then
         printf "failed.\n"
-        echo "Error fetching merge requests (exit code: $merge_requests_exit_code):"
+        printf "Error fetching merge requests (exit code: %s):\n" "$merge_requests_exit_code"
         cat "$merge_requests_log"
         cat "$merge_requests_err_log"
         merge_request_id=""
@@ -55,7 +55,7 @@ else
         merge_request_id="$(jq -r 'map(select( .state=="merged" )) | sort_by(.updated_at) | .[-1] | .iid' <<<"$merge_requests")"
         printf "done.\n"
         if [[ -z "$merge_request_id" || "$merge_request_id" == "null" ]]; then
-            echo "Could not find a merged merge request for commit $CI_COMMIT_SHA" >&2
+            printf "Could not find a merged merge request for commit %s\n" "$CI_COMMIT_SHA"
             merge_request_id=""
         else
             printf "Merge request ID: %s\n" "$merge_request_id"
@@ -77,7 +77,7 @@ merge_request_notes="[]"
 
         if [[ $notes_exit_code -ne 0 ]]; then
             printf "failed.\n"
-            echo "Error fetching notes (exit code: $notes_exit_code):"
+            printf "Error fetching notes (exit code: %s):\n" "$notes_exit_code"
             cat "$notes_log"
             cat "$notes_err_log"
             merge_request_notes="[]"
@@ -86,7 +86,7 @@ merge_request_notes="[]"
             printf "done.\n"
         fi
     else
-        echo "No merge request ID found, skipping notes fetch."
+        printf "No merge request ID found, skipping notes fetch.\n"
     fi
 # Turn command tracing back on if needed
 if [[ "$log_level" == "debug" || "$log_level" == "trace" ]]; then
@@ -100,8 +100,8 @@ collapse_older_pipelines_notes() {
 
     # Validate that merge_request_notes contains valid JSON
     if ! echo "$merge_request_notes" | jq empty 2>/dev/null; then
-        echo "Warning: Invalid JSON in merge_request_notes, skipping note collapse"
-        echo "merge_request_notes: $merge_request_notes"
+        printf "Warning: Invalid JSON in merge_request_notes, skipping note collapse\n"
+        printf "merge_request_notes: %s\n" "$merge_request_notes"
         return
     fi
 
@@ -134,7 +134,7 @@ EOF
                 put_note_exit_code=$?
                 set -e
                 if [[ $put_note_exit_code -ne 0 ]]; then
-                    echo "Error updating note $note_id:"
+                    printf "Error updating note %s:\n" "$note_id"
                     cat "$notes_update_log"
                 fi
                 rm -f /tmp/note_body.txt
@@ -174,7 +174,7 @@ report_error() {
 </details>"
         collapse_older_pipelines_notes
     fi
-    echo "$message"
+    printf "%s\n" "$message"
 }
 
 credentials_log=$(mktemp -t pipelines-credentials-XXXXXXXX.log)
