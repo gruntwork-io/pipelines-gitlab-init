@@ -42,10 +42,12 @@ get_merge_request_id() {
         )
         # Find the first merge request with "state": "merged"
         local -r merge_request_id="$(jq -r 'map(select( .state=="merged" )) | sort_by(.updated_at) | .[-1] | .iid' <<<"$merge_requests")"
-        if [[ -z "$merge_request_id" ]]; then
+        if [[ -z "$merge_request_id" || "$merge_request_id" == "null" ]]; then
             echo "Could not find a merged merge request for commit $CI_COMMIT_SHA" >&2
+            echo ""
+        else
+            echo "$merge_request_id"
         fi
-        echo "$merge_request_id"
     fi
 }
 
