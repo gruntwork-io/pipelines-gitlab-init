@@ -210,7 +210,7 @@ if [[ -n "${PIPELINES_GRUNTWORK_READ_TOKEN:-}" ]]; then
     fi
     printf "done.\n"
 else
-    # Exchange the APERTURE_OIDC_TOKEN for a Gruntwork Read token
+    # Exchange the OIDC_TOKEN issued by the Gruntwork Developer Portal for a Gruntwork Read token
     printf "Authenticating with Gruntwork API... "
     set +e
     PIPELINES_GRUNTWORK_READ_TOKEN=$(get_gruntwork_read_token)
