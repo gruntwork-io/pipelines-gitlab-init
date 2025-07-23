@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# Re-exec the script with unbuffered output if not already done
+if [[ "${STDBUF_APPLIED:-}" != "1" ]]; then
+    export STDBUF_APPLIED=1
+    exec stdbuf -o0 "$0" "$@"
+fi
+
 set -euo pipefail
 log_level="${PIPELINES_LOG_LEVEL:-info}"
 log_level="${log_level,,}" # Convert to lowercase
@@ -13,48 +19,75 @@ fi
 : "${CI_JOB_ID:?"Need to set CI_JOB_ID"}"
 : "${CI_PROJECT_ID:?"Need to set CI_PROJECT_ID"}"
 : "${CI_PROJECT_URL:?"Need to set CI_PROJECT_URL"}"
+: "${CI_SERVER_HOST:?"Need to set CI_SERVER_HOST"}"
 : "${GRUNTWORK_PIPELINES_ACTIONS_REF:?"Need to set GRUNTWORK_PIPELINES_ACTIONS_REF"}"
 : "${PIPELINES_CLI_VERSION:?"Need to set PIPELINES_CLI_VERSION"}"
 : "${PIPELINES_GITLAB_TOKEN:?"Need to set PIPELINES_GITLAB_TOKEN"}"
 
 CI_MERGE_REQUEST_IID="${CI_MERGE_REQUEST_IID:-}"
 
-GITLAB_TOKEN=$PIPELINES_GITLAB_TOKEN
-export GITLAB_TOKEN
+export GITLAB_TOKEN="$PIPELINES_GITLAB_TOKEN"
+export GITLAB_HOST="$CI_SERVER_HOST"
 
-echo "Initializing Gruntwork Pipelines"
+printf "Initializing Gruntwork Pipelines\n"
 
-get_merge_request_id() {
-    if [[ -n "$CI_MERGE_REQUEST_IID" ]]; then
-        echo "$CI_MERGE_REQUEST_IID"
+merge_request_id=""
+if [[ -n "$CI_MERGE_REQUEST_IID" ]]; then
+    merge_request_id="$CI_MERGE_REQUEST_IID"
+else
+    printf "Fetching merge request ID... "
+    merge_requests_log=$(mktemp -t pipelines-merge-requests-XXXXXXXX.log)
+    merge_requests_err_log=$(mktemp -t pipelines-merge-requests-err-XXXXXXXX.log)
+    set +e
+    glab api "projects/$CI_PROJECT_ID/repository/commits/$CI_COMMIT_SHA/merge_requests" --paginate >"$merge_requests_log" 2>"$merge_requests_err_log"
+    merge_requests_exit_code=$?
+    set -e
+
+    if [[ $merge_requests_exit_code -ne 0 ]]; then
+        printf "failed.\n"
+        printf "Error fetching merge requests (exit code: %s):\n" "$merge_requests_exit_code"
+        cat "$merge_requests_log"
+        cat "$merge_requests_err_log"
+        merge_request_id=""
     else
-        # Look for the merge request ID for the current commit
-        local -r merge_requests=$(
-            GITLAB_TOKEN=$PIPELINES_GITLAB_TOKEN \
-                glab api "projects/$CI_PROJECT_ID/repository/commits/$CI_COMMIT_SHA/merge_requests" \
-                --paginate
-        )
+        merge_requests="$(cat "$merge_requests_log")"
         # Find the first merge request with "state": "merged"
-        local -r merge_request_id="$(jq -r 'map(select( .state=="merged" )) | sort_by(.updated_at) | .[-1] | .iid' <<<"$merge_requests")"
-        if [[ -z "$merge_request_id" ]]; then
-            echo "Could not find a merged merge request for commit $CI_COMMIT_SHA" >&2
+        merge_request_id="$(jq -r 'map(select( .state=="merged" )) | sort_by(.updated_at) | .[-1] | .iid' <<<"$merge_requests")"
+        printf "done.\n"
+        if [[ -z "$merge_request_id" || "$merge_request_id" == "null" ]]; then
+            printf "Could not find a merged merge request for commit %s\n" "$CI_COMMIT_SHA"
+            merge_request_id=""
+        else
+            printf "Merge request ID: %s\n" "$merge_request_id"
         fi
-        echo "$merge_request_id"
     fi
-}
-
-echo -n "Fetching merge request ID... "
-merge_request_id=$(get_merge_request_id)
-echo "done."
+fi
 
 # Turn off command tracing before fetching notes
 set +x
 merge_request_notes="[]"
-if [[ -n "$merge_request_id" ]]; then
-    echo -n "Fetching existing merge request notes... "
-    merge_request_notes="$(glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate 2>/dev/null)"
-    echo "done."
-fi
+    if [[ -n "$merge_request_id" ]]; then
+        printf "Fetching existing merge request notes... "
+        notes_log=$(mktemp -t pipelines-notes-XXXXXXXX.log)
+        notes_err_log=$(mktemp -t pipelines-notes-err-XXXXXXXX.log)
+        set +e
+        glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --paginate >"$notes_log" 2>"$notes_err_log"
+        notes_exit_code=$?
+        set -e
+
+        if [[ $notes_exit_code -ne 0 ]]; then
+            printf "failed.\n"
+            printf "Error fetching notes (exit code: %s):\n" "$notes_exit_code"
+            cat "$notes_log"
+            cat "$notes_err_log"
+            merge_request_notes="[]"
+        else
+            merge_request_notes="$(cat "$notes_log")"
+            printf "done.\n"
+        fi
+    else
+        printf "No merge request ID found, skipping notes fetch.\n"
+    fi
 # Turn command tracing back on if needed
 if [[ "$log_level" == "debug" || "$log_level" == "trace" ]]; then
     set -x
@@ -62,6 +95,13 @@ fi
 
 collapse_older_pipelines_notes() {
     if [[ "$merge_request_notes" == "[]" ]]; then
+        return
+    fi
+
+    # Validate that merge_request_notes contains valid JSON
+    if ! echo "$merge_request_notes" | jq empty 2>/dev/null; then
+        printf "Warning: Invalid JSON in merge_request_notes, skipping note collapse\n"
+        printf "merge_request_notes: %s\n" "$merge_request_notes"
         return
     fi
 
@@ -81,15 +121,22 @@ collapse_older_pipelines_notes() {
 
             # find the opening details tag, if it has open directive, replace it with just the details tag
             if [[ "$note_body" =~ "<details open>" ]]; then
-                echo "Removing open directive from note body"
                 collapsed_body=$(sed 's/<details open>/<details>/' <<<"$note_body")
                 # Write the content to a file to prevent going over the command line length capacity
                 cat >/tmp/note_body.txt <<EOF
 $collapsed_body
 EOF
 
+                notes_update_log=$(mktemp -t pipelines-notes-update-XXXXXXXX.log)
+                set +e
                 # Use the --field flag combined with the @ syntax to pass the file content as the body
-                glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$note_id" --method PUT --field "body=@/tmp/note_body.txt" --silent
+                glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes/$note_id" --method PUT --field "body=@/tmp/note_body.txt" --silent >"$notes_update_log" 2>&1
+                put_note_exit_code=$?
+                set -e
+                if [[ $put_note_exit_code -ne 0 ]]; then
+                    printf "Error updating note %s:\n" "$note_id"
+                    cat "$notes_update_log"
+                fi
                 rm -f /tmp/note_body.txt
             fi
         fi
@@ -127,7 +174,7 @@ report_error() {
 </details>"
         collapse_older_pipelines_notes
     fi
-    echo "$message"
+    printf "%s\n" "$message"
 }
 
 credentials_log=$(mktemp -t pipelines-credentials-XXXXXXXX.log)
@@ -142,28 +189,48 @@ get_gruntwork_read_token() {
     echo "$PIPELINES_GRUNTWORK_READ_TOKEN"
 }
 
-# Exchange the APERTURE_OIDC_TOKEN for a Gruntwork Read token
-echo -n "Authenticating with Gruntwork API... "
-set +e
-PIPELINES_GRUNTWORK_READ_TOKEN=$(get_gruntwork_read_token)
-get_gruntwork_read_token_exit_code=$?
-set -e
+# Check if PIPELINES_GRUNTWORK_READ_TOKEN is already set
+if [[ -n "${PIPELINES_GRUNTWORK_READ_TOKEN:-}" ]]; then
+    printf "Verifying configured PIPELINES_GRUNTWORK_READ_TOKEN... "
 
-echo -n "" # gitlab seems to eat the next echo
+    # Verify read access to pipelines-gitlab-actions repository
+    verify_log=$(mktemp -t pipelines-verify-XXXXXXXX.log)
+    set +e
+    curl -sS -f -H "Authorization: token $PIPELINES_GRUNTWORK_READ_TOKEN" \
+        "https://api.github.com/repos/gruntwork-io/pipelines-gitlab-actions" \
+        >"$verify_log" 2>&1
+    verify_exit_code=$?
+    set -e
 
-if [[ $get_gruntwork_read_token_exit_code -ne 0 ]]; then
-    cat "$credentials_log"
-    report_error "Failed to authenticate with the Gruntwork API"
-    exit 1
+    if [[ $verify_exit_code -ne 0 ]]; then
+        printf "failed.\n"
+        cat "$verify_log"
+        report_error "PIPELINES_GRUNTWORK_READ_TOKEN is not able to access the pipelines-gitlab-actions repository."
+        exit 1
+    fi
+    printf "done.\n"
+else
+    # Exchange the OIDC_TOKEN issued by the Gruntwork Developer Portal for a Gruntwork Read token
+    printf "Authenticating with Gruntwork API... "
+    set +e
+    PIPELINES_GRUNTWORK_READ_TOKEN=$(get_gruntwork_read_token)
+    get_gruntwork_read_token_exit_code=$?
+    set -e
+
+    if [[ $get_gruntwork_read_token_exit_code -ne 0 ]]; then
+        cat "$credentials_log"
+        report_error "Failed to authenticate with the Gruntwork API"
+        exit 1
+    fi
+    printf "done.\n"
 fi
-echo "done."
 
 # Make the token available to other sections in the rest of the current job
-export PIPELINES_GRUNTWORK_READ_TOKEN
+export PIPELINES_GRUNTWORK_READ_TOKEN="$PIPELINES_GRUNTWORK_READ_TOKEN"
 echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>"$GITLAB_ENV"
 echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>build.env
 
-echo -n "Cloning pipelines-actions repository... "
+printf "Cloning pipelines-actions repository... "
 # Clone the pipelines-actions repository
 clone_log=$(mktemp -t pipelines-clone-XXXXXXXX.log)
 set +e
@@ -178,9 +245,9 @@ if [[ $clone_exit_code -ne 0 ]]; then
     report_error "Failed to clone the pipelines-actions repository"
     exit 1
 fi
-echo "done."
+printf "done.\n"
 
-echo -n "Installing Pipelines CLI... "
+printf "Installing Pipelines CLI... "
 # Install the Pipelines CLI
 install_log=$(mktemp -t pipelines-install-XXXXXXXX.log)
 set +e
@@ -193,10 +260,10 @@ if [[ $install_exit_code -ne 0 ]]; then
     report_error "Failed to install the Pipelines CLI"
     exit 1
 fi
-echo "done."
+printf "done.\n"
 
 if [[ -n "$merge_request_id" ]]; then
-    echo -n "Collapsing pipeline notes for previous commits... "
+    printf "Collapsing pipeline notes for previous commits... "
     collapse_older_pipelines_notes
-    echo "done."
+    printf "done.\n"
 fi
