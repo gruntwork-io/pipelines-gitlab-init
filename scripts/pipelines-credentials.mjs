@@ -55,15 +55,18 @@ const main = async () => {
             } else {
                 console.error(pipelinesTokenResponse)
                 console.log(`Failed to get pipelines token: ${pipelinesTokenResponse.status} ${pipelinesTokenResponse.statusText}`)
+                process.exit(1)
             }
 
         } else {
             console.error(providerTokenResponse)
             console.log(`Failed to get provider token: ${providerTokenResponse.status} ${providerTokenResponse.statusText}`)
+            process.exit(1)
         }
 
     } catch (error) {
         console.log(`Failed to get pipelines token: ${error}`)
+        process.exit(1)
     }
 }
 

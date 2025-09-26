@@ -218,8 +218,10 @@ else
     set -e
 
     if [[ $get_gruntwork_read_token_exit_code -ne 0 ]]; then
+        error_message="Failed to authenticate with the Gruntwork API"
+        echo "$error_message"
         cat "$credentials_log"
-        report_error "Failed to authenticate with the Gruntwork API"
+        report_error "$error_message"
         exit 1
     fi
     printf "done.\n"
