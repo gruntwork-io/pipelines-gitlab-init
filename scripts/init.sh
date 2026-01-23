@@ -237,7 +237,7 @@ printf "Cloning pipelines-actions repository... "
 clone_log=$(mktemp -t pipelines-clone-XXXXXXXX.log)
 set +e
 git clone -b "$GRUNTWORK_PIPELINES_ACTIONS_REF" \
-    "https://oauth2:$PIPELINES_GRUNTWORK_READ_TOKEN@github.com:/gruntwork-io/pipelines-gitlab-actions.git" /tmp/pipelines-actions \
+    "https://oauth2:$PIPELINES_GRUNTWORK_READ_TOKEN@github.com/gruntwork-io/pipelines-gitlab-actions.git" /tmp/pipelines-actions \
     >"$clone_log" 2>&1
 clone_exit_code=$?
 set -e
