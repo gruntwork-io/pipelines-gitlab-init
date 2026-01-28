@@ -158,6 +158,33 @@ $body"
     fi
 }
 
+retry_with_backoff() {
+    local max_attempts=3
+    local attempt=1
+    local exit_code=0
+
+    while [[ $attempt -le $max_attempts ]]; do
+        set +e
+        "$@"
+        exit_code=$?
+        set -e
+
+        if [[ $exit_code -eq 0 ]]; then
+            return 0
+        fi
+
+        if [[ $attempt -lt $max_attempts ]]; then
+            # Exponential backoff: 2^attempt + random jitter (0-1 seconds)
+            local delay=$(( (1 << attempt) + RANDOM % 2 ))
+            printf "Attempt %d/%d failed, retrying in %ds...\n" "$attempt" "$max_attempts" "$delay"
+            sleep "$delay"
+        fi
+        ((attempt++))
+    done
+
+    return $exit_code
+}
+
 report_error() {
     local message=$1
 
@@ -232,17 +259,18 @@ export PIPELINES_GRUNTWORK_READ_TOKEN="$PIPELINES_GRUNTWORK_READ_TOKEN"
 echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>"$GITLAB_ENV"
 echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>build.env
 
-printf "Cloning pipelines-actions repository... "
+printf "Cloning pipelines-actions repository...\n"
 # Clone the pipelines-actions repository
 clone_log=$(mktemp -t pipelines-clone-XXXXXXXX.log)
-set +e
-git clone -b "$GRUNTWORK_PIPELINES_ACTIONS_REF" \
-    "https://oauth2:$PIPELINES_GRUNTWORK_READ_TOKEN@github.com/gruntwork-io/pipelines-gitlab-actions.git" /tmp/pipelines-actions \
-    >"$clone_log" 2>&1
-clone_exit_code=$?
-set -e
 
-if [[ $clone_exit_code -ne 0 ]]; then
+do_clone() {
+    rm -rf /tmp/pipelines-actions
+    git clone -b "$GRUNTWORK_PIPELINES_ACTIONS_REF" \
+        "https://oauth2:$PIPELINES_GRUNTWORK_READ_TOKEN@github.com/gruntwork-io/pipelines-gitlab-actions.git" /tmp/pipelines-actions \
+        >"$clone_log" 2>&1
+}
+
+if ! retry_with_backoff do_clone; then
     cat "$clone_log"
     report_error "Failed to clone the pipelines-actions repository"
     exit 1
