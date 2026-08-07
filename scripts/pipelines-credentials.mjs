@@ -48,9 +48,13 @@ const main = async () => {
 
             if (pipelinesTokenResponse.ok) {
                 const pipelinesTokenJson = await pipelinesTokenResponse.json()
-                console.log("Outputted pipelines token to build.env")
-                // This must be a project relative path to work with GitLab dotenv artifacts
-                fs.appendFileSync("credentials.sh", `PIPELINES_GRUNTWORK_READ_TOKEN=${pipelinesTokenJson.token}\n`)
+                // The caller sources this file to read the token back. Writing (rather than
+                // appending) keeps a second call in the same job from leaving a stale token
+                // line behind. The caller is expected to pass a temporary file so no
+                // credentials are written into the checked out repository.
+                const outputFile = process.env.PIPELINES_CREDENTIALS_OUTPUT_FILE || "credentials.sh"
+                console.log(`Outputted pipelines token to ${outputFile}`)
+                fs.writeFileSync(outputFile, `PIPELINES_GRUNTWORK_READ_TOKEN=${pipelinesTokenJson.token}\n`)
                 return
             } else {
                 console.error(pipelinesTokenResponse)
