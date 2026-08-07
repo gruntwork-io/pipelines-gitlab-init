@@ -54,7 +54,8 @@ const main = async () => {
                 // credentials are written into the checked out repository.
                 const outputFile = process.env.PIPELINES_CREDENTIALS_OUTPUT_FILE || "credentials.sh"
                 console.log(`Outputted pipelines token to ${outputFile}`)
-                fs.writeFileSync(outputFile, `PIPELINES_GRUNTWORK_READ_TOKEN=${pipelinesTokenJson.token}\n`)
+                const quotedToken = `'${String(pipelinesTokenJson.token).replaceAll("'", `'\\''`)}'`
+                fs.writeFileSync(outputFile, `PIPELINES_GRUNTWORK_READ_TOKEN=${quotedToken}\n`)
                 return
             } else {
                 console.error(pipelinesTokenResponse)
