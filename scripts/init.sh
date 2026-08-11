@@ -13,6 +13,10 @@ if [[ "$log_level" == "debug" || "$log_level" == "trace" ]]; then
     set -x
 fi
 
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+# shellcheck source=scripts/lib/credentials.sh
+source "$SCRIPT_DIR/lib/credentials.sh"
+
 : "${APERTURE_OIDC_TOKEN:?"APERTURE_OIDC_TOKEN must be set"}"
 : "${API_BASE_URL:?"API_BASE_URL must be set"}"
 : "${CI_COMMIT_SHA:?"Need to set CI_COMMIT_SHA"}"
@@ -205,20 +209,15 @@ report_error() {
 }
 
 credentials_log=$(mktemp -t pipelines-credentials-XXXXXXXX.log)
-get_gruntwork_read_token() {
-    export PIPELINES_TOKEN_PATH="pipelines-read/gruntwork-io"
-    SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-    node "$SCRIPT_DIR/pipelines-credentials.mjs" >"$credentials_log" 2>&1
-    # The node script writes the token to a file, so we need to source it to make it available
-    set -a
-    source credentials.sh
-    set +a
-    echo "$PIPELINES_GRUNTWORK_READ_TOKEN"
-}
+
+# Turn off command tracing until the clone is done, so the token and the clone URL that
+# embeds it are never printed to the job log
+set +x
 
 # Check if PIPELINES_GRUNTWORK_READ_TOKEN is already set
 if [[ -n "${PIPELINES_GRUNTWORK_READ_TOKEN:-}" ]]; then
     printf "Verifying configured PIPELINES_GRUNTWORK_READ_TOKEN... "
+    gruntwork_read_token_source="ci_variable"
 
     # Verify read access to pipelines-gitlab-actions repository
     verify_log=$(mktemp -t pipelines-verify-XXXXXXXX.log)
@@ -239,8 +238,9 @@ if [[ -n "${PIPELINES_GRUNTWORK_READ_TOKEN:-}" ]]; then
 else
     # Exchange the OIDC_TOKEN issued by the Gruntwork Developer Portal for a Gruntwork Read token
     printf "Authenticating with Gruntwork API... "
+    gruntwork_read_token_source="aperture"
     set +e
-    PIPELINES_GRUNTWORK_READ_TOKEN=$(get_gruntwork_read_token)
+    PIPELINES_GRUNTWORK_READ_TOKEN=$(mint_gruntwork_read_token "$credentials_log")
     get_gruntwork_read_token_exit_code=$?
     set -e
 
@@ -254,10 +254,9 @@ else
     printf "done.\n"
 fi
 
-# Make the token available to other sections in the rest of the current job
-export PIPELINES_GRUNTWORK_READ_TOKEN="$PIPELINES_GRUNTWORK_READ_TOKEN"
-echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>"$GITLAB_ENV"
-echo "PIPELINES_GRUNTWORK_READ_TOKEN=$PIPELINES_GRUNTWORK_READ_TOKEN" >>build.env
+# Make the token available to the rest of this job and to downstream jobs, recording where it
+# came from so downstream jobs know whether they may refresh it
+publish_gruntwork_read_token "$PIPELINES_GRUNTWORK_READ_TOKEN" "$gruntwork_read_token_source"
 
 printf "Cloning pipelines-actions repository...\n"
 # Clone the pipelines-actions repository
@@ -276,6 +275,11 @@ if ! retry_with_backoff do_clone; then
     exit 1
 fi
 printf "done.\n"
+
+# Turn command tracing back on if needed
+if [[ "$log_level" == "debug" || "$log_level" == "trace" ]]; then
+    set -x
+fi
 
 printf "Installing Pipelines CLI... "
 # Install the Pipelines CLI
