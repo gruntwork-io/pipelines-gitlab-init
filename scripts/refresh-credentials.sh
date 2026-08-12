@@ -10,8 +10,8 @@
 #   source /tmp/pipelines-gitlab-init/scripts/refresh-credentials.sh
 #
 # Requires an APERTURE_OIDC_TOKEN id token and API_BASE_URL; without them the inherited token
-# is kept. Because it is sourced, this script avoids set -e, set -u and exec, which would leak
-# into the calling job shell.
+# is kept, or the refresh fails if there is none. Because it is sourced, this script avoids
+# set -e, set -u and exec, which would leak into the calling job shell.
 
 # Token handling runs untraced so PIPELINES_LOG_LEVEL=debug|trace does not print the token
 case $- in
@@ -31,8 +31,12 @@ refresh_credentials() {
     fi
 
     if [[ -z "${APERTURE_OIDC_TOKEN:-}" || -z "${API_BASE_URL:-}" ]]; then
-        printf "WARNING: APERTURE_OIDC_TOKEN or API_BASE_URL is not set, keeping the inherited PIPELINES_GRUNTWORK_READ_TOKEN.\n" >&2
-        return 0
+        if [[ -n "${PIPELINES_GRUNTWORK_READ_TOKEN:-}" ]]; then
+            printf "WARNING: APERTURE_OIDC_TOKEN or API_BASE_URL is not set, keeping the inherited PIPELINES_GRUNTWORK_READ_TOKEN.\n" >&2
+            return 0
+        fi
+        printf "ERROR: APERTURE_OIDC_TOKEN or API_BASE_URL is not set and no PIPELINES_GRUNTWORK_READ_TOKEN is available.\n" >&2
+        return 1
     fi
 
     printf "Refreshing the Gruntwork read token... "
