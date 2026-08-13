@@ -210,10 +210,6 @@ report_error() {
 
 credentials_log=$(mktemp -t pipelines-credentials-XXXXXXXX.log)
 
-# Turn off command tracing until the clone is done, so the token and the clone URL that
-# embeds it are never printed to the job log
-set +x
-
 # Check if PIPELINES_GRUNTWORK_READ_TOKEN is already set
 if [[ -n "${PIPELINES_GRUNTWORK_READ_TOKEN:-}" ]]; then
     printf "Verifying configured PIPELINES_GRUNTWORK_READ_TOKEN... "
@@ -275,11 +271,6 @@ if ! retry_with_backoff do_clone; then
     exit 1
 fi
 printf "done.\n"
-
-# Turn command tracing back on if needed
-if [[ "$log_level" == "debug" || "$log_level" == "trace" ]]; then
-    set -x
-fi
 
 printf "Installing Pipelines CLI... "
 # Install the Pipelines CLI

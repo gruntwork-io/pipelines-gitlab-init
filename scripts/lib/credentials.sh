@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-#
-# Gruntwork read token helpers shared by init.sh and refresh-credentials.sh.
-# Sourcing only defines functions. Callers are responsible for disabling shell
-# tracing: these functions handle token material and do not manage tracing.
 
 # Exchanges APERTURE_OIDC_TOKEN for a Gruntwork read token and echoes the token.
 # Exchange output is written to the log file given as $1.
@@ -10,23 +6,20 @@
 mint_gruntwork_read_token() {
     local -r credentials_log="$1"
     local -r script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." &>/dev/null && pwd)
-    local -r credentials_file=$(mktemp -t pipelines-credentials-XXXXXXXX.sh)
-    # Local so an inherited value cannot pass for a freshly minted one below.
-    local PIPELINES_GRUNTWORK_READ_TOKEN=""
+    local -r credentials_file=$(mktemp -t pipelines-credentials-XXXXXXXX.token)
+    local token=""
 
     if PIPELINES_TOKEN_PATH="pipelines-read/gruntwork-io" \
         PIPELINES_CREDENTIALS_OUTPUT_FILE="$credentials_file" \
         node "$script_dir/pipelines-credentials.mjs" >"$credentials_log" 2>&1; then
-        # The node script writes the token to a file, so source it to read it back
-        # shellcheck source=/dev/null
-        source "$credentials_file"
+        token=$(<"$credentials_file")
     fi
     rm -f "$credentials_file"
 
-    if [[ -z "$PIPELINES_GRUNTWORK_READ_TOKEN" ]]; then
+    if [[ -z "$token" ]]; then
         return 1
     fi
-    printf "%s\n" "$PIPELINES_GRUNTWORK_READ_TOKEN"
+    printf "%s\n" "$token"
 }
 
 # Exports the token for the rest of the current job and records it in $GITLAB_ENV
