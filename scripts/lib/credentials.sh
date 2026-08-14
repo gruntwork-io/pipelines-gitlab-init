@@ -9,12 +9,17 @@ mint_gruntwork_read_token() {
     local -r credentials_file=$(mktemp -t pipelines-credentials-XXXXXXXX.token)
     local token=""
 
+    trap "rm -f '$credentials_file'" EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+
     if PIPELINES_TOKEN_PATH="pipelines-read/gruntwork-io" \
         PIPELINES_CREDENTIALS_OUTPUT_FILE="$credentials_file" \
         node "$script_dir/pipelines-credentials.mjs" >"$credentials_log" 2>&1; then
         token=$(<"$credentials_file")
     fi
     rm -f "$credentials_file"
+    trap - EXIT INT TERM
 
     if [[ -z "$token" ]]; then
         return 1
