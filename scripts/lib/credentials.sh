@@ -9,6 +9,9 @@ mint_gruntwork_read_token() {
     local -r credentials_file=$(mktemp -t pipelines-credentials-XXXXXXXX.token)
     local token=""
 
+    # credentials_file is function-local, so the trap must capture its value now.
+    # Deferring expansion would run "rm -f ''" on exit and leave the token file behind.
+    # shellcheck disable=SC2064
     trap "rm -f '$credentials_file'" EXIT
     trap 'exit 130' INT
     trap 'exit 143' TERM
