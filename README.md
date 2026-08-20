@@ -15,10 +15,10 @@ runner only applies to later jobs, so re-read it to pick the refreshed token up 
 
 ```yaml
 script:
-  - git clone --depth 1 -b "$PIPELINES_GITLAB_INIT_REF" https://github.com/gruntwork-io/pipelines-gitlab-init.git /tmp/pipelines-gitlab-init
+  - rm -rf /tmp/pipelines-gitlab-init && gw-git-clone --depth 1 -b "$PIPELINES_GITLAB_INIT_REF" https://github.com/gruntwork-io/pipelines-gitlab-init.git /tmp/pipelines-gitlab-init
   - /tmp/pipelines-gitlab-init/scripts/refresh-credentials.sh
   - set -a && source build.env && set +a
-  - git clone -b "$GRUNTWORK_PIPELINES_ACTIONS_REF" "https://oauth2:$PIPELINES_GRUNTWORK_READ_TOKEN@github.com/gruntwork-io/pipelines-gitlab-actions.git" /tmp/pipelines-actions
+  - rm -rf /tmp/pipelines-actions && gw-git-clone --depth 1 -b "$GRUNTWORK_PIPELINES_ACTIONS_REF" "https://oauth2:$PIPELINES_GRUNTWORK_READ_TOKEN@github.com/gruntwork-io/pipelines-gitlab-actions.git" /tmp/pipelines-actions
 ```
 
 The job must declare an `APERTURE_OIDC_TOKEN` id token and set `API_BASE_URL`; the refresh fails

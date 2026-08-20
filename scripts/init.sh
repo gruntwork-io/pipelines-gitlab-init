@@ -125,7 +125,7 @@ collapse_older_pipelines_notes() {
 
             # find the opening details tag, if it has open directive, replace it with just the details tag
             if [[ "$note_body" =~ "<details open>" ]]; then
-                collapsed_body=$(sed 's/<details open>/<details>/' <<<"$note_body")
+                collapsed_body="${note_body//<details open>/<details>}"
                 # Write the content to a file to prevent going over the command line length capacity
                 cat >/tmp/note_body.txt <<EOF
 $collapsed_body
@@ -160,33 +160,6 @@ $body"
     else
         glab api "projects/$CI_PROJECT_ID/merge_requests/$merge_request_id/notes" --raw-field "body=$sticky_body" --silent
     fi
-}
-
-retry_with_backoff() {
-    local max_attempts=3
-    local attempt=1
-    local exit_code=0
-
-    while [[ $attempt -le $max_attempts ]]; do
-        set +e
-        "$@"
-        exit_code=$?
-        set -e
-
-        if [[ $exit_code -eq 0 ]]; then
-            return 0
-        fi
-
-        if [[ $attempt -lt $max_attempts ]]; then
-            # Exponential backoff: 2^attempt + random jitter (0-1 seconds)
-            local delay=$(( (1 << attempt) + RANDOM % 2 ))
-            printf "Attempt %d/%d failed, retrying in %ds...\n" "$attempt" "$max_attempts" "$delay"
-            sleep "$delay"
-        fi
-        ((attempt++))
-    done
-
-    return $exit_code
 }
 
 report_error() {
@@ -255,18 +228,11 @@ fi
 publish_gruntwork_read_token "$PIPELINES_GRUNTWORK_READ_TOKEN" "$gruntwork_read_token_source"
 
 printf "Cloning pipelines-actions repository...\n"
-# Clone the pipelines-actions repository
-clone_log=$(mktemp -t pipelines-clone-XXXXXXXX.log)
-
-do_clone() {
-    rm -rf /tmp/pipelines-actions
-    git clone -b "$GRUNTWORK_PIPELINES_ACTIONS_REF" \
-        "https://oauth2:$PIPELINES_GRUNTWORK_READ_TOKEN@github.com/gruntwork-io/pipelines-gitlab-actions.git" /tmp/pipelines-actions \
-        >"$clone_log" 2>&1
-}
-
-if ! retry_with_backoff do_clone; then
-    cat "$clone_log"
+# gw-git-clone comes from the base image and owns the retry policy
+rm -rf /tmp/pipelines-actions
+if ! gw-git-clone --depth 1 -b "$GRUNTWORK_PIPELINES_ACTIONS_REF" \
+    "https://oauth2:$PIPELINES_GRUNTWORK_READ_TOKEN@github.com/gruntwork-io/pipelines-gitlab-actions.git" \
+    /tmp/pipelines-actions; then
     report_error "Failed to clone the pipelines-actions repository"
     exit 1
 fi
